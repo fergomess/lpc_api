@@ -3,9 +3,24 @@ from tastypie import fields, utils
 from tastypie.authorization import Authorization
 from evento.models import *
 from django.contrib.auth.models import User
+from tastypie.exceptions import Unauthorized
 
 
 class TipoInscricaoResource(ModelResource):
+    def obj_create(self, bundle, **kwargs):
+        print(bundle.data)
+        if not(TipoInscricao.objects.filter(descricao=bundle.data['descricao'])):
+            tipo = TipoInscricao()
+            tipo.descricao = bundle.data['descricao'].upper()
+            tipo.save()
+            bundle.obj = tipo
+            return bundle
+        else:
+            raise Unauthorized('Já existe TipoInscricao com essa descricao');
+
+    def obj_delete_list(self, bundle, **kwargs):
+        raise Unauthorized("Voce não pode deletar toda a lista");
+
     class Meta:
         queryset = TipoInscricao.objects.all() #lista ou consulta do recurso
         allowed_methods = ['get','post','put','delete']
@@ -79,9 +94,25 @@ class ArtigoCientificoResource(ModelResource):
         authorization = Authorization()
 
 class InscricoesResource(ModelResource):
-    pessoa = fields.ToOneField(PessoaFisicaResource, 'pessoa') #diz que é pra fazer o relacionamento de chave estrangeira, e na tela mostra a referencia da pessoa: URL
-    evento = fields.ToOneField(EventoResource, 'evento')
-    tipoInscricao = fields.ToOneField(TipoInscricaoResource, 'tipoInscricao')
+    def obj_create(self, bundle, **kwargs):
+
+        pessoa = bundle.data['pessoa'].split("/")
+        evento = bundle.data['evento'].split("/")
+        tipoInsc = bundle.data['tipoInscricao'].split("/")
+
+        oi = Inscricoes.objects.filter(pessoa=pessoa[4], evento=evento[4]) #faz o and como se fosse o select, e realiza o filter buscando a pessoa e o evento
+
+        if oi.count() > 0:
+            raise Unauthorized('Já existe inscrição com essa pessoa');
+        else:
+            inscricao = Inscricoes()
+            inscricao.pessoa = PessoaFisica.objects.get(pk=pessoa[4])
+            inscricao.evento = Evento.objects.get(pk=evento[4])
+            inscricao.tipoInscricao = TipoInscricao.objects.get(pk=tipoInsc[4])
+            inscricao.save()
+            bundle.obj = inscricao
+            return bundle
+
     class Meta:
         queryset = Inscricoes.objects.all()
         allowed_methods = ['get','post','put','delete']
